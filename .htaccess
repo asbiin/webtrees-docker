@@ -1,0 +1,25 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # https://webtrees.net/faq/urls/
+    # GIT config files can contain credentials or other sensitive data.
+    RewriteRule \.git - [F]
+
+    # User data is stored here by default.
+    RewriteRule ^data(/|$) - [F]
+
+    # Nothing sensitive here, but there is no need to publish it.
+    RewriteRule ^app(/|$) - [F]
+    RewriteRule ^modules - [F]
+    RewriteRule ^resources(/|$) - [F]
+    RewriteRule ^vendor(/|$) - [F]
+
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+
+    RewriteRule ^ index.php [L]
+</IfModule>
