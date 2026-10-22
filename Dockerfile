@@ -136,7 +136,8 @@ ENV HOME=/home/webtrees
 WORKDIR /var/www/html
 USER webtrees
 
-ENV WEBTREES_VERSION="2.2.6"
+ARG WEBTREES_VERSION=2.2.6
+ENV WEBTREES_VERSION="${WEBTREES_VERSION}"
 RUN set -ex; \
     cd /var/www/html; \
     curl -fsSL -o webtrees.zip "https://github.com/fisharebest/webtrees/releases/download/${WEBTREES_VERSION}/webtrees-${WEBTREES_VERSION}.zip"; \

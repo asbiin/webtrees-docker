@@ -21,9 +21,38 @@ env:
   registry: ghcr.io
 
 jobs:
+  infos:
+    runs-on: ubuntu-latest
+    name: Info
+    outputs:
+      latest: ${{ steps.infos.outputs.latest }}
+    steps:
+      - name: Get release info
+        uses: actions/github-script@v6
+        id: infos
+        with:
+          script: |
+            const releases = await github.rest.repos.getReleases({
+              owner: 'fisharebest',
+              repo: 'webtrees'
+            });
+            // sort by version (semantic release)
+            releases.data.sort((a, b) => {
+              const versionA = a.tag_name.replace(/^v/, '').split('.').map(Number);
+              const versionB = b.tag_name.replace(/^v/, '').split('.').map(Number);
+              for (let i = 0; i < Math.max(versionA.length, versionB.length); i++) {
+                const diff = (versionA[i] || 0) - (versionB[i] || 0);
+                if (diff !== 0) return diff;
+              }
+              return 0;
+            });
+            core.setOutput("latest", releases.data[releases.data.length - 1].tag_name);
+
+
   docker-run:
     runs-on: ubuntu-latest
     name: Build webtrees
+    needs: infos
 
     strategy:
       fail-fast: false
@@ -47,6 +76,14 @@ jobs:
           tags: |
             type=ref,enable=true,priority=600,prefix=pr-,suffix=,event=pr
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ needs.infos.outputs.latest }}
+          labels: |
+            maintainer=${{ github.repository_owner }}
+            org.opencontainers.image.title="webtrees"
+            org.opencontainers.image.description="webtrees Docker image"
+            org.opencontainers.image.version=${{ needs.infos.outputs.latest }}
+            org.opencontainers.image.url="https://github.com/${{ github.repository_owner }}/${{ github.repository }}"
+            org.opencontainers.image.source="https://github.com/${{ github.repository_owner }}/${{ github.repository }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -63,7 +100,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v7
         with:
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.docker_meta.outputs.tags }}
           cache-from: type=registry,ref=${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}:latest
           labels: ${{ steps.docker_meta.outputs.labels }}
@@ -72,7 +109,7 @@ jobs:
           context: .
           platforms: 'linux/amd64,linux/arm64'
           build-args: |
-            VARIANT=latest
+            WEBTREES_VERSION=${{ needs.infos.outputs.latest }}
 
       - name: Attest
         uses: actions/attest@v4
