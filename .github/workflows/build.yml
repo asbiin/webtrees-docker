@@ -32,12 +32,27 @@ jobs:
         id: infos
         with:
           script: |
-            const releases = await github.rest.repos.getReleases({
-              owner: 'fisharebest',
-              repo: 'webtrees'
-            });
+            // get all releases
+            // paginate through releases if needed (per_page=100)
+            let allReleases = [];
+            let page = 1;
+            while (true) {
+              const response = await github.rest.repos.listReleases({
+                owner: 'fisharebest',
+                repo: 'webtrees',
+                per_page: 100,
+                page: page
+              });
+              allReleases = allReleases.concat(response.data);
+              if (response.data.length < 100) break;
+              page++;
+            }
+
+            // number of releases
+            console.log(`Found ${allReleases.length} releases`);
+
             // sort by version (semantic release)
-            releases.data.sort((a, b) => {
+            allReleases.sort((a, b) => {
               const versionA = a.tag_name.replace(/^v/, '').split('.').map(Number);
               const versionB = b.tag_name.replace(/^v/, '').split('.').map(Number);
               for (let i = 0; i < Math.max(versionA.length, versionB.length); i++) {
@@ -46,7 +61,10 @@ jobs:
               }
               return 0;
             });
-            core.setOutput("latest", releases.data[releases.data.length - 1].tag_name);
+
+            // latest release
+            console.log(`Latest release: ${allReleases[allReleases.length - 1].tag_name}`);
+            core.setOutput("latest", allReleases[allReleases.length - 1].tag_name);
 
 
   docker-run:
