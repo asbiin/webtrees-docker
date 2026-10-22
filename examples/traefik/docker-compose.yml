@@ -21,7 +21,7 @@ services:
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?set ACME_EMAIL in .env}
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
     ports:
@@ -39,21 +39,21 @@ services:
         condition: service_healthy
     environment:
       # The public address: webtrees builds every link from it
-      BASE_URL: "https://${WEBTREES_DOMAIN:?set WEBTREES_DOMAIN in .env}"
+      BASE_URL: "https://${WEBTREES_DOMAIN:?}"
       PRETTY_URLS: "1"
       LANG: "${WEBTREES_LANGUAGE:-en-US}"
       DB_TYPE: "mysql"
       DB_HOST: "db"
       DB_PORT: "3306"
       DB_USER: "webtrees"
-      DB_PASS: "${DB_PASSWORD:?set DB_PASSWORD in .env}"
+      DB_PASS: "${DB_PASSWORD:?}"
       DB_NAME: "webtrees"
       DB_PREFIX: "wt_"
       # Initial administrator, created on the very first start only
       WT_USER: "${WT_USER:-admin}"
       WT_NAME: "${WT_NAME:-Administrator}"
-      WT_PASS: "${WT_PASS:?set WT_PASS in .env}"
-      WT_EMAIL: "${WT_EMAIL:?set WT_EMAIL in .env}"
+      WT_PASS: "${WT_PASS:?}"
+      WT_EMAIL: "${WT_EMAIL:?}"
     labels:
       - traefik.enable=true
       - traefik.http.routers.webtrees.rule=Host(`${WEBTREES_DOMAIN}`)

@@ -3,11 +3,9 @@
 # The usual setup on a home server or a NAS, or behind a reverse proxy that
 # already runs on the host (nginx, Caddy, Apache...) and forwards to port 8080.
 #
+#   cp .env.example .env    # then set the passwords
 #   docker compose up -d
-#   open http://localhost:8080 and log in as admin / changeme
-#
-# Put DB_PASSWORD and WT_PASS in a .env file next to this one to override the
-# default passwords.
+#   open http://localhost:8080 and log in as admin, with WT_PASS
 
 services:
   webtrees:
@@ -27,13 +25,13 @@ services:
       DB_HOST: "db"
       DB_PORT: "3306"
       DB_USER: "webtrees"
-      DB_PASS: "${DB_PASSWORD:-webtrees}"
+      DB_PASS: "${DB_PASSWORD:?}"
       DB_NAME: "webtrees"
       DB_PREFIX: "wt_"
       # Initial administrator, created on the very first start only
       WT_USER: "admin"
       WT_NAME: "Administrator"
-      WT_PASS: "${WT_PASS:-changeme}"
+      WT_PASS: "${WT_PASS:?}"
       WT_EMAIL: "admin@example.com"
     ports:
       - "8080:80"
@@ -48,7 +46,7 @@ services:
     environment:
       MARIADB_DATABASE: "webtrees"
       MARIADB_USER: "webtrees"
-      MARIADB_PASSWORD: "${DB_PASSWORD:-webtrees}"
+      MARIADB_PASSWORD: "${DB_PASSWORD}"
       MARIADB_RANDOM_ROOT_PASSWORD: "1"
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]

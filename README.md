@@ -73,17 +73,13 @@ The database is the file `data/webtrees.sqlite`, in the same volume as the media
 
 ```bash
 cd examples/mariadb
+cp .env.example .env   # then set the passwords
 docker compose up -d
 ```
 
 webtrees is served over plain HTTP on port 8080. This suits a local network, or a reverse proxy that already runs on the host and forwards to that port (see [Behind a reverse proxy](#behind-a-reverse-proxy)).
 
-The webtrees service waits for the database health check, as the first start needs a database that accepts connections. Override the default passwords with a `.env` file next to `docker-compose.yml`:
-
-```dotenv
-DB_PASSWORD=a-long-random-password
-WT_PASS=another-long-random-password
-```
+The webtrees service waits for the database health check, as the first start needs a database that accepts connections. Compose refuses to start until both passwords are set in `.env`.
 
 <details>
 <summary>Using PostgreSQL instead of MariaDB</summary>
@@ -98,7 +94,7 @@ services:
       DB_HOST: "db"
       DB_PORT: "5432"
       DB_USER: "webtrees"
-      DB_PASS: "${DB_PASSWORD:-webtrees}"
+      DB_PASS: "${DB_PASSWORD:?}"
       DB_NAME: "webtrees"
       # ...
 
@@ -107,7 +103,7 @@ services:
     environment:
       POSTGRES_DB: "webtrees"
       POSTGRES_USER: "webtrees"
-      POSTGRES_PASSWORD: "${DB_PASSWORD:-webtrees}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U webtrees -d webtrees"]
       interval: 10s
@@ -191,7 +187,7 @@ Read on the first start only:
 | `DB_HOST` | *(empty)* | Host name of the database server. Not used with SQLite. |
 | `DB_PORT` | `3306` | Port of the database server. **Set it to `5432` for PostgreSQL.** |
 | `DB_USER` | `webtrees` | Database user. Falls back to `MYSQL_USER`, `MARIADB_USER` or `POSTGRES_USER`. |
-| `DB_PASS` | `webtrees` | Password of the database user. Falls back to `MYSQL_PASSWORD`, `MARIADB_PASSWORD` or `POSTGRES_PASSWORD`. |
+| `DB_PASS` | *(empty)* | Password of the database user. Falls back to `MYSQL_PASSWORD`, `MARIADB_PASSWORD` or `POSTGRES_PASSWORD`. |
 | `DB_NAME` | `webtrees` | Database name. Falls back to `MYSQL_DATABASE`, `MARIADB_DATABASE` or `POSTGRES_DB`. With SQLite, the database is the file `data/<DB_NAME>.sqlite`. |
 | `DB_PREFIX` | `wt_` | Prefix of the table names, which lets several webtrees sites share a database. |
 | `WT_USER` | | User name of the administrator account to create. |

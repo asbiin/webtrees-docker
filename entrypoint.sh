@@ -15,7 +15,7 @@ install() {
   local dbhost=${DB_HOST}
   local dbport=${DB_PORT:-3306}
   local dbuser=${DB_USER:-${MYSQL_USER:-${MARIADB_USER:-${POSTGRES_USER:-webtrees}}}}
-  local dbpass=${DB_PASS:-${MYSQL_PASSWORD:-${MARIADB_PASSWORD:-${POSTGRES_PASSWORD:-webtrees}}}}
+  local dbpass=${DB_PASS:-${MYSQL_PASSWORD:-${MARIADB_PASSWORD:-${POSTGRES_PASSWORD}}}}
   local dbname=${DB_NAME:-${MYSQL_DATABASE:-${MARIADB_DATABASE:-${POSTGRES_DB:-webtrees}}}}
   local tblpfx=${DB_PREFIX:-wt_}
   local base_url=${BASE_URL}
