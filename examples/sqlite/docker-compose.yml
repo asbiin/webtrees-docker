@@ -1,0 +1,32 @@
+# webtrees in a single container, with an SQLite database.
+#
+# Nothing else to run: the database is a file stored next to the media files in
+# the data volume. Good for trying webtrees or for a small private family tree.
+# webtrees recommends MySQL/MariaDB for anything bigger (see ../mariadb).
+#
+#   docker compose up -d
+#   open http://localhost:8080 and log in as admin / changeme
+
+services:
+  webtrees:
+    image: ghcr.io/asbiin/webtrees:latest
+    environment:
+      BASE_URL: "http://localhost:8080"
+      PRETTY_URLS: "1"
+      LANG: "en-US"
+      DB_TYPE: "sqlite"
+      # The database is stored in /var/www/html/data/webtrees.sqlite
+      DB_NAME: "webtrees"
+      # Initial administrator, created on the very first start only
+      WT_USER: "admin"
+      WT_NAME: "Administrator"
+      WT_PASS: "${WT_PASS:-changeme}"
+      WT_EMAIL: "admin@example.com"
+    ports:
+      - "8080:80"
+    volumes:
+      - webtrees-data:/var/www/html/data
+    restart: unless-stopped
+
+volumes:
+  webtrees-data:
