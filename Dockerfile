@@ -148,6 +148,7 @@ RUN set -ex; \
 
 COPY --chown=webtrees:webtrees .htaccess /var/www/html/.htaccess
 COPY entrypoint.sh /usr/local/bin/
+COPY install.php /usr/local/lib/webtrees/
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["apache2-foreground"]
