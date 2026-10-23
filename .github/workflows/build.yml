@@ -74,6 +74,8 @@ jobs:
 
     strategy:
       fail-fast: false
+      matrix:
+        php-version: [8.4, 8.5]
   
     permissions:
       contents: read
@@ -93,6 +95,7 @@ jobs:
           images: ${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}
           tags: |
             type=ref,enable=true,priority=600,prefix=pr-,suffix=,event=pr
+            type=raw,value=${{ matrix.php-version }},enable=true
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ needs.infos.outputs.latest }}
           labels: |
@@ -127,6 +130,7 @@ jobs:
           context: .
           platforms: 'linux/amd64,linux/arm64'
           build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
             WEBTREES_VERSION=${{ needs.infos.outputs.latest }}
 
       - name: Attest
