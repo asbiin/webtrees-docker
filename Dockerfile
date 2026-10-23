@@ -115,10 +115,12 @@ RUN set -e; \
 
 ARG UID=1000
 ARG GID=1000
-RUN groupadd --gid "${GID}" webtrees || true; \
-    useradd --uid "${UID}" --gid "${GID}" --create-home webtrees \
-    && mkdir --parents /var/www/html \
-    && chown webtrees:webtrees /var/www/html
+RUN set -ex; \
+    \
+    groupadd --gid "${GID}" webtrees || true; \
+    useradd --uid "${UID}" --gid "${GID}" --create-home webtrees; \
+    mkdir --parents /var/www/html; \
+    chown webtrees:webtrees /var/www/html
 
 ENV HOME=/home/webtrees
 WORKDIR /var/www/html
@@ -126,7 +128,9 @@ USER webtrees
 
 ARG WEBTREES_VERSION=2.2.6
 ENV WEBTREES_VERSION="${WEBTREES_VERSION}"
+LABEL org.opencontainers.image.version="v${WEBTREES_VERSION}"
 RUN set -ex; \
+    \
     cd /var/www/html; \
     curl -fsSL -o webtrees.zip "https://github.com/fisharebest/webtrees/releases/download/${WEBTREES_VERSION}/webtrees-${WEBTREES_VERSION}.zip"; \
     unzip webtrees.zip; \
@@ -190,11 +194,13 @@ USER root
 # The pool runs as the user that starts PHP-FPM: user and group can only be set when starting as
 # root, and FPM warns about them otherwise.
 RUN set -ex; \
+    \
     sed -i -E 's/^(user|group) = /;\1 = /' /usr/local/etc/php-fpm.d/www.conf
 
 # The web server serves public/ itself, from a volume it shares with this container. The entrypoint
 # fills that volume from this copy whenever it holds another webtrees version.
 RUN set -ex; \
+    \
     echo "${WEBTREES_VERSION}" > /var/www/html/public/.webtrees-version; \
     chown webtrees:webtrees /var/www/html/public/.webtrees-version; \
     mkdir --parents /usr/src/webtrees; \
