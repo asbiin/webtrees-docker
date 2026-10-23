@@ -1,0 +1,90 @@
+# webtrees published on the Internet over HTTPS, behind Traefik.
+#
+# Traefik gets a Let's Encrypt certificate for WEBTREES_DOMAIN and redirects
+# HTTP to HTTPS. The server must be reachable on ports 80 and 443 under that
+# name.
+#
+#   cp .env.example .env    # then fill in the values
+#   docker compose up -d
+#   open https://<WEBTREES_DOMAIN>
+#
+# Left empty, the passwords default to webtrees (database) and changeme
+# (administrator): set them before the first start.
+#
+# Traefik already running on the host? Drop the traefik service, attach the
+# webtrees service to Traefik's network and keep its labels (see the README).
+
+services:
+  traefik:
+    image: traefik:v3
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    restart: unless-stopped
+
+  webtrees:
+    image: ghcr.io/asbiin/webtrees:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # The public address: webtrees builds every link from it
+      BASE_URL: "https://${WEBTREES_DOMAIN:?}"
+      PRETTY_URLS: "1"
+      LANG: "${WEBTREES_LANGUAGE:-en-US}"
+      DB_TYPE: "mysql"
+      DB_HOST: "db"
+      DB_PORT: "3306"
+      DB_USER: "webtrees"
+      DB_PASS: "${DB_PASSWORD:-webtrees}"
+      DB_NAME: "webtrees"
+      DB_PREFIX: "wt_"
+      # Initial administrator, created on the very first start only
+      WT_USER: "${WT_USER:-admin}"
+      WT_NAME: "${WT_NAME:-Administrator}"
+      WT_PASS: "${WT_PASS:-changeme}"
+      WT_EMAIL: "${WT_EMAIL:-admin@example.com}"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.webtrees.rule=Host(`${WEBTREES_DOMAIN}`)
+      - traefik.http.routers.webtrees.entrypoints=websecure
+      - traefik.http.routers.webtrees.tls.certresolver=letsencrypt
+      - traefik.http.services.webtrees.loadbalancer.server.port=80
+    volumes:
+      - webtrees-data:/var/www/html/data
+    restart: unless-stopped
+
+  db:
+    image: mariadb:12
+    environment:
+      MARIADB_DATABASE: "webtrees"
+      MARIADB_USER: "webtrees"
+      MARIADB_PASSWORD: "${DB_PASSWORD:-webtrees}"
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - db-data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  letsencrypt:
+  webtrees-data:
+  db-data:

@@ -1,4 +1,5 @@
-FROM php:8.4-apache
+ARG PHP_VERSION=8.4
+FROM php:${PHP_VERSION}-apache
 
 # entrypoint.sh dependencies
 RUN set -ex; \
@@ -77,7 +78,10 @@ ENV PHP_MEMORY_LIMIT="512M" \
     PHP_UPLOAD_LIMIT="512M"
 RUN set -ex; \
     \
-    docker-php-ext-enable opcache; \
+    # OPcache is built into PHP from 8.5 on, and an extension to enable before
+    if ! php -r 'exit(extension_loaded("Zend OPcache") ? 0 : 1);'; then \
+        docker-php-ext-enable opcache; \
+    fi; \
     { \
         echo '[opcache]'; \
         echo 'opcache.enable=1'; \
@@ -148,6 +152,7 @@ RUN set -ex; \
 
 COPY --chown=webtrees:webtrees .htaccess /var/www/html/.htaccess
 COPY entrypoint.sh /usr/local/bin/
+COPY install.php /usr/local/lib/webtrees/
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["apache2-foreground"]
