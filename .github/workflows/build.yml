@@ -144,7 +144,7 @@ jobs:
           load: true
           push: false
           tags: webtrees:test
-          cache-from: type=registry,ref=${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}:${{ matrix.variant }}
+          cache-from: type=gha
           file: Dockerfile
           context: .
           build-args: |
@@ -161,12 +161,15 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
-          tags: ${{ steps.docker_meta.outputs.tags }}
-          cache-from: type=registry,ref=${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}:${{ matrix.variant }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
           annotations: ${{ steps.docker_meta.outputs.annotations }}
-          provenance: mode=max
+          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
           file: Dockerfile
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           context: .
           # platforms: 'linux/amd64,linux/arm64'
           build-args: |
@@ -190,6 +193,18 @@ jobs:
           subject-name: ${{ env.dockerhub-image }}
           subject-digest: ${{ steps.docker_build.outputs.digest }}
           push-to-registry: true
+
+      - name: Docker Scout
+        id: docker-scout
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: docker/scout-action@v1
+        with:
+          command: compare
+          image: ${{ env.dockerhub-image }}:${{ matrix.variant }}
+          to-env: production
+          ignore-unchanged: true
+          only-severities: critical,high
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
