@@ -78,7 +78,10 @@ ENV PHP_MEMORY_LIMIT="512M" \
     PHP_UPLOAD_LIMIT="512M"
 RUN set -ex; \
     \
-    docker-php-ext-enable opcache; \
+    # OPcache is built into PHP from 8.5 on, and an extension to enable before
+    if ! php -r 'exit(extension_loaded("Zend OPcache") ? 0 : 1);'; then \
+        docker-php-ext-enable opcache; \
+    fi; \
     { \
         echo '[opcache]'; \
         echo 'opcache.enable=1'; \
