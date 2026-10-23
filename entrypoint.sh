@@ -7,6 +7,7 @@ set -Eeo pipefail
 
 ROOT_DIR=/var/www/html
 CONFIG_FILE=$ROOT_DIR/data/config.ini.php
+PUBLIC_SOURCE=/usr/src/webtrees/public
 
 # Writes data/config.ini.php, then creates the database tables and the administrator. It runs as a
 # condition, where set -e does not apply, so every step returns as soon as it fails.
@@ -64,6 +65,15 @@ install() {
 }
 
 if expr "$1" : "apache" 1>/dev/null || [ "$1" = "php-fpm" ]; then
+
+  # With PHP-FPM, public/ is a volume the web server reads too: Docker only fills it when it is
+  # empty, so bring it to the webtrees version of the image after an upgrade.
+  if [ "$1" = "php-fpm" ] && [ -d "$PUBLIC_SOURCE" ] \
+      && [ "$(cat "$ROOT_DIR/public/.webtrees-version" 2>/dev/null)" != "$WEBTREES_VERSION" ]; then
+    echo "Copying the static files of webtrees $WEBTREES_VERSION to public/."
+    find "$ROOT_DIR/public" -mindepth 1 -delete
+    cp -a "$PUBLIC_SOURCE/." "$ROOT_DIR/public/"
+  fi
 
   if [ ! -f "$CONFIG_FILE" ]; then
     echo "webtrees is not yet installed."
