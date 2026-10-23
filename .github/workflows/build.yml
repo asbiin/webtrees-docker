@@ -19,6 +19,7 @@ concurrency:
 env:
   image-name: webtrees
   registry: ghcr.io
+  dockerhub-image: docker.io/asbin/webtrees
   # PHP version and variant the tags without them point to
   default-php: 8.5
   default-variant: apache
@@ -96,7 +97,9 @@ jobs:
         id: docker_meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}
+          images: |
+            ${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}
+            ${{ env.dockerhub-image }}
           # <version>-php<php>-<variant> for every build, <version>-<variant> and <variant> for the
           # default PHP version. The tags without a variant point to the default variant (apache).
           tags: |
@@ -124,6 +127,15 @@ jobs:
           registry: ${{ env.registry }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Only when pushing: the secrets are not available to pull requests from forks
+      - name: Login to Docker Hub
+        if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Build the image into the local Docker engine and test it before pushing anything
       - name: Docker build for tests
@@ -167,6 +179,14 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         with:
           subject-name: ${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}
+          subject-digest: ${{ steps.docker_build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest (Docker Hub)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+        with:
+          subject-name: ${{ env.dockerhub-image }}
           subject-digest: ${{ steps.docker_build.outputs.digest }}
           push-to-registry: true
 

@@ -43,7 +43,7 @@ That is enough to try webtrees. For a real site, start from one of the [examples
 
 ## Image tags
 
-The image is published as `ghcr.io/asbiin/webtrees`.
+The image is published on the GitHub container registry as `ghcr.io/asbiin/webtrees` and on Docker Hub as [`asbin/webtrees`](https://hub.docker.com/r/asbin/webtrees), with the same tags.
 
 | Tag | Flavor | Content |
 |---|---|---|
