@@ -8,6 +8,9 @@
 #   docker compose up -d
 #   open https://<WEBTREES_DOMAIN>
 #
+# Left empty, the passwords default to webtrees (database) and changeme
+# (administrator): set them before the first start.
+#
 # Traefik already running on the host? Drop the traefik service, attach the
 # webtrees service to Traefik's network and keep its labels (see the README).
 

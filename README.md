@@ -73,13 +73,14 @@ The database is the file `data/webtrees.sqlite`, in the same volume as the media
 
 ```bash
 cd examples/mariadb
-cp .env.example .env   # then set the passwords
 docker compose up -d
 ```
 
+Open <http://localhost:8080> and log in as `admin` / `changeme`.
+
 webtrees is served over plain HTTP on port 8080. This suits a local network, or a reverse proxy that already runs on the host and forwards to that port (see [Behind a reverse proxy](#behind-a-reverse-proxy)).
 
-The webtrees service waits for the database health check, as the first start needs a database that accepts connections. Compose refuses to start until both passwords are set in `.env`.
+The webtrees service waits for the database health check, as the first start needs a database that accepts connections. The passwords default to `webtrees` (database) and `changeme` (administrator): to replace them, copy `.env.example` to `.env` and fill it in before the first start.
 
 <details>
 <summary>Using PostgreSQL instead of MariaDB</summary>
@@ -94,7 +95,7 @@ services:
       DB_HOST: "db"
       DB_PORT: "5432"
       DB_USER: "webtrees"
-      DB_PASS: "${DB_PASSWORD:?}"
+      DB_PASS: "${DB_PASSWORD:-webtrees}"
       DB_NAME: "webtrees"
       # ...
 
@@ -103,7 +104,7 @@ services:
     environment:
       POSTGRES_DB: "webtrees"
       POSTGRES_USER: "webtrees"
-      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-webtrees}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U webtrees -d webtrees"]
       interval: 10s
@@ -120,11 +121,11 @@ services:
 
 ```bash
 cd examples/traefik
-cp .env.example .env   # then fill in every value
+cp .env.example .env   # then fill in the values
 docker compose up -d
 ```
 
-[Traefik](https://traefik.io/traefik/) obtains a Let's Encrypt certificate for `WEBTREES_DOMAIN`, redirects HTTP to HTTPS and forwards requests to webtrees. Before starting, make sure the DNS record of the domain points to the server and that ports 80 and 443 are reachable from the Internet. Compose refuses to start while a required value of `.env` is missing.
+[Traefik](https://traefik.io/traefik/) obtains a Let's Encrypt certificate for `WEBTREES_DOMAIN`, redirects HTTP to HTTPS and forwards requests to webtrees. Before starting, make sure the DNS record of the domain points to the server and that ports 80 and 443 are reachable from the Internet. Compose refuses to start without `WEBTREES_DOMAIN` and `ACME_EMAIL`. Set `DB_PASSWORD` and `WT_PASS` as well: left empty, they default to `webtrees` and `changeme`, which anyone can guess on a public site.
 
 <details>
 <summary>Joining a Traefik instance you already run</summary>

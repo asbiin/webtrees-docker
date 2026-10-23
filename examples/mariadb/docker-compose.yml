@@ -3,9 +3,11 @@
 # The usual setup on a home server or a NAS, or behind a reverse proxy that
 # already runs on the host (nginx, Caddy, Apache...) and forwards to port 8080.
 #
-#   cp .env.example .env    # then set the passwords
 #   docker compose up -d
-#   open http://localhost:8080 and log in as admin, with WT_PASS
+#   open http://localhost:8080 and log in as admin / changeme
+#
+# To replace the default passwords, copy .env.example to .env and fill it in
+# before the first start.
 
 services:
   webtrees:
