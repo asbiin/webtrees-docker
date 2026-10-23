@@ -19,7 +19,9 @@ concurrency:
 env:
   image-name: webtrees
   registry: ghcr.io
-  default-latest: 8.5
+  # PHP version and variant the tags without them point to
+  default-php: 8.5
+  default-variant: apache
 
 jobs:
   infos:
@@ -70,13 +72,14 @@ jobs:
 
   docker-run:
     runs-on: ubuntu-latest
-    name: Build webtrees
+    name: Build webtrees (PHP ${{ matrix.php-version }}, ${{ matrix.variant }})
     needs: infos
 
     strategy:
       fail-fast: false
       matrix:
         php-version: [8.4, 8.5]
+        variant: [apache, fpm]
   
     permissions:
       contents: read
@@ -94,11 +97,16 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}
+          # <version>-php<php>-<variant> for every build, <version>-<variant> and <variant> for the
+          # default PHP version. The tags without a variant point to the default variant (apache).
           tags: |
-            type=ref,enable=true,priority=600,prefix=pr-,suffix=,event=pr
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.php-version == '8.5' }}
-            type=raw,value=${{ needs.infos.outputs.latest }}-php${{ matrix.php-version }}
-            type=raw,value=${{ needs.infos.outputs.latest }},enable=${{ github.ref == 'refs/heads/main' && matrix.php-version == '8.5' }}
+            type=ref,enable=true,priority=600,prefix=pr-,suffix=-php${{ matrix.php-version }}-${{ matrix.variant }},event=pr
+            type=raw,value=${{ needs.infos.outputs.latest }}-php${{ matrix.php-version }}-${{ matrix.variant }}
+            type=raw,value=${{ needs.infos.outputs.latest }}-php${{ matrix.php-version }},enable=${{ matrix.variant == env.default-variant }}
+            type=raw,value=${{ needs.infos.outputs.latest }}-${{ matrix.variant }},enable=${{ github.ref == 'refs/heads/main' && matrix.php-version == env.default-php }}
+            type=raw,value=${{ matrix.variant }},enable=${{ github.ref == 'refs/heads/main' && matrix.php-version == env.default-php }}
+            type=raw,value=${{ needs.infos.outputs.latest }},enable=${{ github.ref == 'refs/heads/main' && matrix.php-version == env.default-php && matrix.variant == env.default-variant }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.php-version == env.default-php && matrix.variant == env.default-variant }}
           labels: |
             maintainer=${{ github.repository_owner }}
             org.opencontainers.image.title="webtrees"
@@ -117,14 +125,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build docker
+      # Build the image into the local Docker engine and test it before pushing anything
+      - name: Docker build for tests
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          load: true
+          push: false
+          tags: webtrees:test
+          cache-from: type=registry,ref=${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}:${{ matrix.variant }}
+          file: Dockerfile
+          context: .
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+            VARIANT=${{ matrix.variant }}
+            WEBTREES_VERSION=${{ needs.infos.outputs.latest }}
+
+      - name: Test image
+        run: tests/run.sh webtrees:test ${{ matrix.variant }}
+
+      # Build docker: the layers come from the cache of the build above
       - name: Docker build
         id: docker_build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.docker_meta.outputs.tags }}
-          cache-from: type=registry,ref=${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}:latest
+          cache-from: type=registry,ref=${{ env.registry }}/${{ github.repository_owner }}/${{ env.image-name }}:${{ matrix.variant }}
           labels: ${{ steps.docker_meta.outputs.labels }}
           annotations: ${{ steps.docker_meta.outputs.annotations }}
           file: Dockerfile
@@ -132,6 +158,7 @@ jobs:
           # platforms: 'linux/amd64,linux/arm64'
           build-args: |
             PHP_VERSION=${{ matrix.php-version }}
+            VARIANT=${{ matrix.variant }}
             WEBTREES_VERSION=${{ needs.infos.outputs.latest }}
 
       - name: Attest

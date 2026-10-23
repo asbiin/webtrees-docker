@@ -4,8 +4,9 @@
 
 Docker image for [webtrees](https://webtrees.net/), the free and open source web application for collaborative genealogy.
 
-- Built on the official `php:8.4-apache` image, with every PHP extension webtrees uses, plus APCu and OPcache.
-- Ships the latest webtrees release and is rebuilt every week to pick up security fixes from the base image.
+- Two flavors: `apache` (Apache and PHP in one container, the default) and `fpm` (PHP-FPM, behind a web server of your choice).
+- Built on the official `php` images, with every PHP extension webtrees uses, plus APCu and OPcache.
+- Ships the latest webtrees release and is rebuilt every week to pick up security fixes from the base image. Each build is tested before it is published.
 - Runs as an unprivileged user (`webtrees`, UID/GID 1000).
 - Configures itself on the first start from environment variables: no setup wizard to click through.
 - Works with MySQL/MariaDB, PostgreSQL and SQLite.
@@ -15,6 +16,7 @@ Docker image for [webtrees](https://webtrees.net/), the free and open source web
 
 - [Quick start](#quick-start)
 - [Image tags](#image-tags)
+- [Flavors: apache or fpm](#flavors-apache-or-fpm)
 - [Examples](#examples)
 - [How the first start works](#how-the-first-start-works)
 - [Configuration](#configuration)
@@ -43,22 +45,40 @@ That is enough to try webtrees. For a real site, start from one of the [examples
 
 The image is published as `ghcr.io/asbiin/webtrees`.
 
-| Tag | Content |
-|---|---|
-| `latest` | The latest webtrees release. |
-| `2.2.6`, … | A given webtrees release. |
+| Tag | Flavor | Content |
+|---|---|---|
+| `latest`, `apache` | apache | The latest webtrees release. |
+| `fpm` | fpm | The latest webtrees release. |
+| `2.2.6`, `2.2.6-apache` | apache | A given webtrees release. |
+| `2.2.6-fpm` | fpm | A given webtrees release. |
+| `2.2.6-php8.5-apache`, `2.2.6-php8.4-apache`, `2.2.6-php8.5`, `2.2.6-php8.4` | apache | A given webtrees release on a given PHP version. |
+| `2.2.6-php8.5-fpm`, `2.2.6-php8.4-fpm` | fpm | A given webtrees release on a given PHP version. |
 
-The tag of the current webtrees release is rebuilt every week; the tags of older releases stop being updated. Pin a version tag on a production site and [upgrade](#upgrading) when you decide to.
+The tags without a flavor (`latest`, `2.2.6`, `2.2.6-php8.5`) are the `apache` flavor. The tags without a PHP version use PHP 8.5.
+
+The tags of the current webtrees release are rebuilt every week; the tags of older releases stop being updated. Pin a version tag on a production site and [upgrade](#upgrading) when you decide to.
+
+## Flavors: apache or fpm
+
+| | `apache` | `fpm` |
+|---|---|---|
+| Runs | Apache with mod_php | PHP-FPM only |
+| Listens on | port 80, HTTP | port 9000, FastCGI |
+| Needs | nothing else | a web server (nginx, Caddy…) that serves `public/` and sends the other requests to PHP-FPM |
+| Best for | most sites | a site behind a web server you already run, or tuned by hand |
+
+Both flavors configure webtrees in the same way, with the same [environment variables](#environment-variables) and the same data volume. Pick `apache` unless you have a reason to run your own web server: the [`fpm` example](#4-php-fpm-behind-nginx) shows what the web server needs.
 
 ## Examples
 
-The [`examples`](examples) folder holds three ready-to-run Docker Compose setups. Each one is a starting point: copy the folder and adapt it.
+The [`examples`](examples) folder holds four ready-to-run Docker Compose setups. Each one is a starting point: copy the folder and adapt it.
 
 | Example | Best for | Services |
 |---|---|---|
 | [`sqlite`](examples/sqlite) | Trying webtrees, a small private family tree | webtrees |
 | [`mariadb`](examples/mariadb) | A home server or a NAS, a site behind a reverse proxy you already run | webtrees, MariaDB |
 | [`traefik`](examples/traefik) | A public site over HTTPS | Traefik, webtrees, MariaDB |
+| [`fpm`](examples/fpm) | Running your own web server in front of PHP-FPM | nginx, webtrees (`fpm`), MariaDB |
 
 ### 1. Single container with SQLite
 
@@ -155,9 +175,25 @@ Keep the database on the `default` network only, so that it is not reachable fro
 
 </details>
 
+### 4. PHP-FPM behind nginx
+
+```bash
+cd examples/fpm
+docker compose up -d
+```
+
+Open <http://localhost:8080> and log in as `admin` / `changeme`.
+
+The `fpm` image only runs PHP: [`nginx.conf`](examples/fpm/nginx.conf) serves the static files of webtrees and sends every other request to `index.php` over FastCGI. With another web server, reproduce the same two rules:
+
+- `/public/…` is served from the `public/` directory of webtrees. The example shares it with nginx through the `webtrees-public` volume. Docker fills that volume from the image when it is empty, and the entrypoint refreshes it when the image holds another webtrees version, so it stays right across upgrades.
+- Every other request goes to PHP-FPM on port `9000` of the webtrees container, with `SCRIPT_FILENAME` set to `/var/www/html/index.php`. Nothing else is exposed: `data/` cannot be downloaded.
+
+Raise the request size limit of the web server to match `PHP_UPLOAD_LIMIT` (`client_max_body_size` in nginx). Passwords work as in the MariaDB example.
+
 ## How the first start works
 
-Each time the container starts Apache, its entrypoint:
+Each time the container starts Apache or PHP-FPM, its entrypoint:
 
 1. Checks for `data/config.ini.php`. When it is missing, webtrees is not installed yet, so the entrypoint:
    - writes `config.ini.php` from `BASE_URL`, `PRETTY_URLS` and the `DB_*` variables, waiting up to a minute for the database server to accept connections (with SQLite, it creates the database file);
@@ -166,7 +202,8 @@ Each time the container starts Apache, its entrypoint:
 
    When a step fails, the entrypoint removes `config.ini.php` and stops the container: the next start tries again from the beginning.
 2. Sets the default language of the site, when `LANG` is set.
-3. Starts Apache.
+3. With the `fpm` flavor, copies the static files to `public/` when they belong to another webtrees version.
+4. Starts Apache or PHP-FPM.
 
 As a result:
 
@@ -205,7 +242,7 @@ Read on every start:
 | `LANG` | *(unchanged)* | Default language of the site, as a webtrees language code: `en-US`, `en-GB`, `fr`, `de`, `nl`, `pt-BR`, `zh-Hans`… ([full list](https://github.com/fisharebest/webtrees/tree/main/resources/lang)). Each user can still pick their own language. |
 | `PHP_MEMORY_LIMIT` | `512M` | PHP `memory_limit`. |
 | `PHP_UPLOAD_LIMIT` | `512M` | PHP `upload_max_filesize` and `post_max_size`: the largest media file or GEDCOM file you can upload. |
-| `APACHE_BODY_LIMIT` | `1073741824` | Apache `LimitRequestBody`, in bytes (1 GiB). |
+| `APACHE_BODY_LIMIT` | `1073741824` | Apache `LimitRequestBody`, in bytes (1 GiB). `apache` flavor only. |
 | `PHP_OPCACHE_VALIDATE_TIMESTAMPS` | `0` | With `0`, PHP files stay cached until the container restarts. Set `1` while you develop a module. |
 | `PHP_OPCACHE_MAX_ACCELERATED_FILES` | `20000` | OPcache `max_accelerated_files`. |
 | `PHP_OPCACHE_MEMORY_CONSUMPTION` | `192` | OPcache `memory_consumption`, in MB. |
@@ -217,6 +254,7 @@ Read on every start:
 |---|---|
 | `/var/www/html/data` | **Must be persisted.** `config.ini.php`, media files (`media/`), the SQLite database, the cache. |
 | `/var/www/html/modules_v4` | Optional. [Third-party modules](https://webtrees.net/download/modules). |
+| `/var/www/html/public` | `fpm` flavor only: share it with the web server, which serves these static files. Need not be backed up. |
 
 Named volumes, as in the examples, are the simplest: Docker fills them with the content of the image and gives them the right owner. A bind mount works too, as long as the host directory belongs to UID 1000:
 
@@ -244,11 +282,11 @@ Run `docker compose exec webtrees php index.php config-ini --help` for the full 
 
 ### User and group
 
-Apache runs as the user `webtrees` (UID 1000, GID 1000) and listens on port 80 inside the container. To run with another UID/GID, for instance to match the owner of a bind-mounted directory, build the image yourself (see [Building the image](#building-the-image)) with `--build-arg UID=… --build-arg GID=…`.
+Apache and PHP-FPM run as the user `webtrees` (UID 1000, GID 1000). Inside the container, Apache listens on port 80 and PHP-FPM on port 9000. To run with another UID/GID, for instance to match the owner of a bind-mounted directory, build the image yourself (see [Building the image](#building-the-image)) with `--build-arg UID=… --build-arg GID=…`.
 
 ## Behind a reverse proxy
 
-The container serves plain HTTP on port 80: terminate HTTPS in a reverse proxy in front of it.
+The container serves plain HTTP on port 80: terminate HTTPS in a reverse proxy in front of it. This section is about the `apache` flavor; with `fpm`, the web server in front of PHP-FPM plays that part (the example nginx trusts `X-Real-IP` from private networks in the same way).
 
 - Set `BASE_URL` to the public `https://` address.
 - webtrees records the IP address of visitors in its logs and uses it to block abusive robots. Apache takes the visitor address from the `X-Real-IP` header, and only trusts it from private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), which include Docker networks. Traefik sends this header by default; other proxies must be told to.
@@ -371,10 +409,13 @@ webtrees upgrades the database schema by itself on the first page request after 
 
 ```bash
 docker build -t webtrees .
+docker build --build-arg VARIANT=fpm -t webtrees:fpm .
 ```
 
 | Build argument | Default | Description |
 |---|---|---|
+| `VARIANT` | `apache` | Flavor to build: `apache` or `fpm`. |
+| `PHP_VERSION` | `8.4` | Version of the `php` base image. The CI builds 8.4 and 8.5. |
 | `WEBTREES_VERSION` | `2.2.6` | webtrees release to install. The CI passes the latest release. |
 | `UID` | `1000` | UID of the `webtrees` user. |
 | `GID` | `1000` | GID of the `webtrees` user. |
@@ -383,7 +424,18 @@ docker build -t webtrees .
 docker build --build-arg WEBTREES_VERSION=2.2.6 --build-arg UID=1001 --build-arg GID=1001 -t webtrees:2.2.6 .
 ```
 
-To run a local build from one of the examples, replace its `image:` line with `build: ../..`.
+To run a local build from one of the examples, replace its `image:` line with `build: ../..` (see the comment in the `fpm` example to pass `VARIANT`).
+
+### Tests
+
+The build itself fails when a PHP extension is missing or when the Apache or PHP-FPM configuration is invalid. Then [`tests/run.sh`](tests/run.sh) checks a built image: it installs webtrees with SQLite, serves it (through nginx, with [`examples/fpm/nginx.conf`](examples/fpm/nginx.conf), for the `fpm` flavor), requests a few pages, checks that `data/` cannot be downloaded and that a restart keeps the installation. The CI runs it on every build, and only pushes images that pass.
+
+```bash
+tests/run.sh webtrees apache
+tests/run.sh webtrees:fpm fpm
+```
+
+It needs Docker and curl, and pulls `nginx:stable` for the `fpm` flavor.
 
 ## License
 

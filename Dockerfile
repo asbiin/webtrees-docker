@@ -1,5 +1,9 @@
 ARG PHP_VERSION=8.4
-FROM php:${PHP_VERSION}-apache
+# apache: Apache and mod_php, serves HTTP on port 80.
+# fpm: PHP-FPM only, serves FastCGI on port 9000 to a web server in another container.
+ARG VARIANT=apache
+
+FROM php:${PHP_VERSION}-${VARIANT} AS base
 
 # entrypoint.sh dependencies
 RUN set -ex; \
@@ -102,6 +106,45 @@ RUN set -ex; \
         echo 'post_max_size=${PHP_UPLOAD_LIMIT}'; \
     } > $PHP_INI_DIR/conf.d/limits.ini;
 
+# Fails the build when an extension webtrees needs did not make it into the image.
+RUN set -e; \
+    for ext in apcu bcmath curl gd gmp iconv intl mbstring mysqli pdo_mysql pdo_pgsql pdo_sqlite \
+        simplexml soap xml zip 'Zend OPcache'; do \
+        php -r "exit(extension_loaded('$ext') ? 0 : 1);" || { echo "Missing PHP extension: $ext" >&2; exit 1; }; \
+    done
+
+ARG UID=1000
+ARG GID=1000
+RUN groupadd --gid "${GID}" webtrees || true; \
+    useradd --uid "${UID}" --gid "${GID}" --create-home webtrees \
+    && mkdir --parents /var/www/html \
+    && chown webtrees:webtrees /var/www/html
+
+ENV HOME=/home/webtrees
+WORKDIR /var/www/html
+USER webtrees
+
+ARG WEBTREES_VERSION=2.2.6
+ENV WEBTREES_VERSION="${WEBTREES_VERSION}"
+RUN set -ex; \
+    cd /var/www/html; \
+    curl -fsSL -o webtrees.zip "https://github.com/fisharebest/webtrees/releases/download/${WEBTREES_VERSION}/webtrees-${WEBTREES_VERSION}.zip"; \
+    unzip webtrees.zip; \
+    rm webtrees.zip; \
+    mv webtrees/* .; \
+    rmdir webtrees; \
+    test -f index.php
+
+COPY entrypoint.sh /usr/local/bin/
+COPY install.php /usr/local/lib/webtrees/
+
+ENTRYPOINT ["entrypoint.sh"]
+
+
+FROM base AS variant-apache
+
+USER root
+
 RUN set -ex; \
     \
     a2enmod headers rewrite remoteip; \
@@ -122,13 +165,6 @@ RUN set -ex; \
     } > $APACHE_CONFDIR/conf-available/apache-limits.conf; \
     a2enconf apache-limits
 
-ARG UID=1000
-ARG GID=1000
-RUN groupadd --gid "${GID}" webtrees || true; \
-    useradd --uid "${UID}" --gid "${GID}" --create-home webtrees \
-    && mkdir --parents /var/www/html \
-    && chown webtrees:webtrees /var/www/html
-
 RUN mkdir --parents /var/run/apache2 /var/lock/apache2 \
     && chown --recursive webtrees:webtrees /var/run/apache2 /var/lock/apache2 /var/log/apache2
 
@@ -136,23 +172,40 @@ RUN mkdir --parents /var/run/apache2 /var/lock/apache2 \
 # change user once it has started as one, and telling it which user that is keeps it from warning.
 ENV APACHE_RUN_USER=webtrees
 ENV APACHE_RUN_GROUP=webtrees
-ENV HOME=/home/webtrees
-WORKDIR /var/www/html
-USER webtrees
-
-ARG WEBTREES_VERSION=2.2.6
-ENV WEBTREES_VERSION="${WEBTREES_VERSION}"
-RUN set -ex; \
-    cd /var/www/html; \
-    curl -fsSL -o webtrees.zip "https://github.com/fisharebest/webtrees/releases/download/${WEBTREES_VERSION}/webtrees-${WEBTREES_VERSION}.zip"; \
-    unzip webtrees.zip; \
-    rm webtrees.zip; \
-    mv webtrees/* .; \
-    rmdir webtrees
 
 COPY --chown=webtrees:webtrees .htaccess /var/www/html/.htaccess
-COPY entrypoint.sh /usr/local/bin/
-COPY install.php /usr/local/lib/webtrees/
 
-ENTRYPOINT ["entrypoint.sh"]
+USER webtrees
+
+# Fails the build on an invalid Apache configuration.
+RUN apache2ctl -t
+
 CMD ["apache2-foreground"]
+
+
+FROM base AS variant-fpm
+
+USER root
+
+# The pool runs as the user that starts PHP-FPM: user and group can only be set when starting as
+# root, and FPM warns about them otherwise.
+RUN set -ex; \
+    sed -i -E 's/^(user|group) = /;\1 = /' /usr/local/etc/php-fpm.d/www.conf
+
+# The web server serves public/ itself, from a volume it shares with this container. The entrypoint
+# fills that volume from this copy whenever it holds another webtrees version.
+RUN set -ex; \
+    echo "${WEBTREES_VERSION}" > /var/www/html/public/.webtrees-version; \
+    chown webtrees:webtrees /var/www/html/public/.webtrees-version; \
+    mkdir --parents /usr/src/webtrees; \
+    cp -a /var/www/html/public /usr/src/webtrees/public
+
+USER webtrees
+
+# Fails the build on an invalid PHP-FPM configuration.
+RUN php-fpm --test
+
+CMD ["php-fpm"]
+
+
+FROM variant-${VARIANT}
