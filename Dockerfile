@@ -1,4 +1,4 @@
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.5
 # apache: Apache and mod_php, serves HTTP on port 80.
 # fpm: PHP-FPM only, serves FastCGI on port 9000 to a web server in another container.
 ARG VARIANT=apache
