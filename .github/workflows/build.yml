@@ -195,20 +195,5 @@ jobs:
           subject-digest: ${{ steps.docker_build.outputs.digest }}
           push-to-registry: true
 
-      - name: Docker Scout
-        id: docker-scout
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84 # v1.27.0
-        with:
-          command: compare
-          image: ${{ env.dockerhub-image }}:${{ matrix.variant }}
-          to-env: production
-          ignore-unchanged: true
-          only-severities: critical,high
-          github-token: ${{ github.token }}
-          write-comment: true
-          dockerhub-user: ${{ secrets.DOCKERHUB_USER }}
-          dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
